@@ -20,7 +20,7 @@ install_deps()
     echo "This will install all the packages necessary to build avidemux"
     echo "You will be asked to enter your password because installing build dependencies requires root permissions"
     # gcc, g++ and make get installed as dependencies of build-essential
-    sudo apt-get update && sudo apt-get install build-essential cmake pkg-config yasm \
+    apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential cmake pkg-config yasm \
     libsqlite3-dev \
     libxv-dev libvdpau-dev libva-dev \
     libasound2-dev libpulse-dev \
@@ -30,24 +30,24 @@ install_deps()
     libpng-dev libfontconfig1-dev libfribidi-dev \
     || { echo "The installation at least of some of the build dependencies failed. Aborting." && exit 2; }
     # we don't fail if the following packages cannot be installed
-    sudo apt-get install libaften-dev \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libaften-dev \
     || echo "Warning: libaften-dev cannot be installed using package management." \
             "Aften AC-3 audio encoder plugin won't be built." # not officially packaged for Debian
-    sudo apt-get install libfaac-dev \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libfaac-dev \
     || echo "Warning: libfaac-dev cannot be installed using package management." \
             "FAAC AAC audio encoder plugin won't be built." # in non-free on Debian
-    sudo apt-get install libfdk-aac-dev \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libfdk-aac-dev \
     || echo "Warning: libfdk-aac-dev cannot be installed using package management." \
             "fdk-aac AAC audio encoder plugin won't be built." # in non-free on Debian
-    sudo apt-get install libx265-dev \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libx265-dev \
     || echo "Warning: libx265-dev cannot be installed using package management." \
             "Avidemux won't be able to encode HEVC unless the library and the headers have been installed manually." \
             "Continuing anyway." # there are no official libx265 packages for Ubuntu Trusty
-    sudo apt-get install libvpx-dev \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libvpx-dev \
     || echo "Warning: libvpx-dev cannot be installed using package management." \
             "Avidemux won't be able to encode VP9 unless the library and the headers have been installed manually." \
             "Continuing anyway."
-    sudo apt-get install libaom-dev \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y libaom-dev \
     || echo "Warning: libaom-dev cannot be installed using package management." \
             "Avidemux won't be able to decode AV1 unless the library and the headers have been installed manually." \
             "Continuing anyway." # available from Ubuntu Eoan on
@@ -56,7 +56,7 @@ install_deps()
 install_avidemux()
 {
     echo "Installing avidemux..."
-    cd debs && sudo dpkg -i *
+    cd debs && dpkg -i *
 }
 #
 option_value()
