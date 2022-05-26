@@ -1,5 +1,5 @@
 project: rnshah9/avidemux2
-target: avidemux2
+target: avidemux3-cli
 
 cmds:
   - cmd: /repo/buildCli/avidemux3_cli @@
