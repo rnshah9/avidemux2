@@ -1,4 +1,4 @@
-project: rnshah9/avidemux2
+project: avidemux2
 target: avidemux3-cli
 
 cmds:
