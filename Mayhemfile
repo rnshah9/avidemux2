@@ -2,4 +2,4 @@ project: avidemux2
 target: avidemux3-cli
 
 cmds:
-  - cmd: /repo/buildCli/avidemux3_cli @@
+  - cmd: /install/bin/avidemux3_cli @@
