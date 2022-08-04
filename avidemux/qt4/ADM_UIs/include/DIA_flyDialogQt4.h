@@ -105,7 +105,6 @@ class ADM_UIQT46_EXPORT ADM_flyDialog : public QObject
           QTimer        timer;
           uint32_t      _w, _h, _zoomW, _zoomH;
           float         _zoom;
-          uint32_t      _zoomChangeCount;
           ResizeMethod  _resizeMethod;
           uint64_t      lastPts;
           double        _computedZoom;
@@ -146,7 +145,6 @@ class ADM_UIQT46_EXPORT ADM_flyDialog : public QObject
 protected:
   virtual ADM_pixelFormat     toRgbPixFrmt(void);
           void               updateZoom(void);
-          void               EndConstructor(void);
           uint8_t            cleanup(void);  
           bool               initializeSize();
           float              calcZoomToBeDisplayable(uint32_t imageWidth, uint32_t imageHeight);
@@ -173,11 +171,15 @@ public:
   virtual float    calcZoomFactor(void);  
   virtual uint32_t sliderGet(void);             // Return the slider value between 0 and ADM_FLY_SLIDER_MAX
   virtual uint8_t  sliderSet(uint32_t value);  // Set slider value between 0 and ADM_FLY_SLIDE_MAX
-  virtual void     postInit(uint8_t reInit);
-public:  
-  virtual uint8_t  sliderChanged(void);
+
+// Either refreshImage(), sliderChanged() or gotoSelectionStart() must be called
+// before valueChanged(int) signal from the slider is connected to its slot.
+
+  virtual bool     refreshImage(void);
+  virtual bool     sliderChanged(void);
   virtual void     updateSlider(void);
   virtual bool     goToTime(uint64_t tme);
+  virtual bool     goToExactTime(uint64_t tme);
 
 private:
   virtual bool     nextImageInternal(void);
@@ -186,6 +188,8 @@ public slots:
         virtual bool nextImage(void);
         virtual void backOneMinute(void);
         virtual void fwdOneMinute(void);
+        virtual void gotoSelectionStart(void);
+        virtual void gotoSelectionEnd(void);
         virtual void play(bool status);
         virtual void peekOriginalPressed(void);
         virtual void peekOriginalReleased(void);
@@ -239,21 +243,6 @@ public:
 };
 
 /**
- * \fn ADM_flyDialogYuv
- */
-class ADM_UIQT46_EXPORT FlyDialogEventFilter : public QObject
-{
-        ADM_flyDialog *flyDialog;
-        bool recomputed;
-
-public:
-        FlyDialogEventFilter(ADM_flyDialog *flyDialog);
-
-protected:
-        bool eventFilter(QObject *obj, QEvent *event);
-};
-
-/**
     \fn ADM_QRubberBand
     \brief Override platform-dependent appearance of QRubberBand
 */
@@ -301,7 +290,11 @@ private:
         QPoint dragOffset;
         QRect dragGeometry;
         void resizeEvent(QResizeEvent *);
+#if QT_VERSION < QT_VERSION_CHECK(6,0,0)
         void enterEvent(QEvent *);
+#else
+        void enterEvent(QEnterEvent *);
+#endif
         void leaveEvent(QEvent *);
         void mousePressEvent(QMouseEvent *);
         void mouseReleaseEvent(QMouseEvent *);

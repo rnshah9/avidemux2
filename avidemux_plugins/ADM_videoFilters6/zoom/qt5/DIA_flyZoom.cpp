@@ -11,6 +11,8 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+#include <QGroupBox>
+
 #include <cmath>
 #include "DIA_flyDialogQt4.h"
 #include "ADM_default.h"
@@ -19,6 +21,7 @@
 #include "./Q_zoom.h"
 #include "ADM_toolkitQt.h"
 #include "ADM_QSettings.h"
+#include "DIA_factory.h"
 
 /**
  * 
@@ -525,7 +528,7 @@ void flyZoom::setTabOrder(void)
 //	Video is in YV12 Colorspace
 //
 //
-Ui_zoomWindow::Ui_zoomWindow(QWidget* parent, zoom *param,ADM_coreVideoFilter *in) : QDialog(parent)
+Ui_zoomWindow::Ui_zoomWindow(QWidget* parent, zoom *param, bool firstRun, ADM_coreVideoFilter *in) : QDialog(parent)
 {
     ui.setupUi(this);
     lock=0;
@@ -544,6 +547,16 @@ Ui_zoomWindow::Ui_zoomWindow(QWidget* parent, zoom *param,ADM_coreVideoFilter *i
     {
         qset->beginGroup("zoom");
         rubberIsHidden = qset->value("rubberIsHidden", false).toBool();
+        if (firstRun)
+        {
+            param->algo = qset->value("defaultAlgo", 1).toInt();
+            param->pad = qset->value("defaultPadding", 0).toInt();
+            // sanitize
+            if(param->algo >= ui.comboBoxAlgo->count())
+                param->algo = 1;
+            if(param->pad >= ui.comboBoxPad->count())
+                param->pad = 0;
+        }
         qset->endGroup();
         delete qset;
         qset = NULL;
@@ -558,7 +571,7 @@ Ui_zoomWindow::Ui_zoomWindow(QWidget* parent, zoom *param,ADM_coreVideoFilter *i
     ui.comboBoxAspectRatio->setCurrentIndex(param->ar_select);
     if(!param->ar_select)
         myFly->upload(false,true);
-    myFly->sliderChanged();
+    myFly->refreshImage();
     myFly->lockRubber(true);
 
     connect( ui.horizontalSlider,SIGNAL(valueChanged(int)),this,SLOT(sliderUpdate(int)));
@@ -570,6 +583,10 @@ Ui_zoomWindow::Ui_zoomWindow(QWidget* parent, zoom *param,ADM_coreVideoFilter *i
 
     QPushButton *pushButtonReset = ui.buttonBox->button(QDialogButtonBox::Reset);
     connect(pushButtonReset,SIGNAL(clicked(bool)),this,SLOT(reset(bool)));
+
+    preferencesButton = ui.buttonBox->addButton(QT_TRANSLATE_NOOP("zoom","Preferences"),QDialogButtonBox::ResetRole);
+    preferencesButton->setCheckable(true);
+    connect(preferencesButton,SIGNAL(clicked(bool)),this,SLOT(setPreferences(bool)));
 
     changeARSelect(param->ar_select);
 
@@ -613,20 +630,8 @@ void Ui_zoomWindow::gather(zoom *param)
  */
 Ui_zoomWindow::~Ui_zoomWindow()
 {
-    if(myFly)
-    {
-        QSettings *qset = qtSettingsCreate();
-        if(qset)
-        {
-            qset->beginGroup("zoom");
-            qset->setValue("rubberIsHidden", myFly->stateOfRubber());
-            qset->endGroup();
-            delete qset;
-            qset = NULL;
-        }
-        delete myFly;
-        myFly=NULL;
-    }
+    if(myFly) delete myFly;
+    myFly=NULL;
     if(canvas) delete canvas;
     canvas=NULL;
 }
@@ -698,6 +703,13 @@ void Ui_zoomWindow::toggleRubber(int checkState)
     myFly->hideRubber(!visible);
 }
 /**
+ * \fn rubberIsVisible
+ */
+bool Ui_zoomWindow::rubberIsHidden(void)
+{
+    return myFly->stateOfRubber();
+}
+/**
  * \fn applyAspectRatio
  */
 void Ui_zoomWindow::applyAspectRatio(void) {
@@ -736,6 +748,106 @@ void Ui_zoomWindow::changeARSelect(int f)
     ui.spinBoxLeft->setEnabled(!keep_aspect);
     ui.spinBoxTop->setEnabled(!keep_aspect);
     myFly->hideRubberGrips(keep_aspect,false);
+}
+
+/**
+ * \fn setPreferences
+ */
+void Ui_zoomWindow::setPreferences(bool f)
+{
+    UNUSED_ARG(f);
+
+    QSettings *qset = qtSettingsCreate();
+    if(!qset)
+    {
+        preferencesButton->setChecked(false);
+        return;
+    }
+    myFly->play(false); // stop playback
+
+    qset->beginGroup("zoom");
+
+    QDialog dialog(preferencesButton);
+    dialog.setWindowTitle(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Preferences")));
+
+    QGroupBox *frameDefaults = new QGroupBox(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Defaults for new filter instances")));
+
+    QLabel *textAlgo = new QLabel(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Resize method:")));
+
+    QComboBox *saveAlgoComboBox = new QComboBox();
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Most recently accepted")),-1);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Bilinear")),0);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Bicubic")),1);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Lanczos")),2);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Spline")),3);
+
+    int userData = (qset->value("saveAlgo", 0).toInt() > 0)? -1 : qset->value("defaultAlgo", 1).toInt();
+
+    for(int i = 0; i < saveAlgoComboBox->count(); i++)
+    {
+        if(userData != saveAlgoComboBox->itemData(i).toInt()) continue;
+        saveAlgoComboBox->setCurrentIndex(i);
+        break;
+    }
+
+    QLabel *textPaddingType = new QLabel(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Padding type:")));
+
+    QComboBox *savePadComboBox = new QComboBox();
+    savePadComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Most recently accepted")),-1);
+    savePadComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Black Bars")),0);
+    savePadComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","Echo")),1);
+    savePadComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("zoom","None")),2);
+
+    userData = (qset->value("savePad", 0).toInt() > 0)? -1 : qset->value("defaultPadding", 0).toInt();
+
+    for(int i = 0; i < savePadComboBox->count(); i++)
+    {
+        if(userData != savePadComboBox->itemData(i).toInt()) continue;
+        savePadComboBox->setCurrentIndex(i);
+        break;
+    }
+
+    QSpacerItem *spacer = new QSpacerItem(20, 20, QSizePolicy::Minimum, QSizePolicy::MinimumExpanding);
+
+    QDialogButtonBox *buttonBox = new QDialogButtonBox();
+    buttonBox->setStandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+
+    QObject::connect(buttonBox, SIGNAL(accepted()), &dialog, SLOT(accept()));
+    QObject::connect(buttonBox, SIGNAL(rejected()), &dialog, SLOT(reject()));
+
+    QGridLayout *grid = new QGridLayout();
+
+    grid->addWidget(textAlgo,0,0);
+    grid->addWidget(saveAlgoComboBox,0,1);
+    grid->addWidget(textPaddingType,1,0);
+    grid->addWidget(savePadComboBox,1,1);
+    grid->setColumnStretch(1,1);
+
+    frameDefaults->setLayout(grid);
+
+    QVBoxLayout *vboxLayout = new QVBoxLayout();
+
+    vboxLayout->addWidget(frameDefaults);
+    vboxLayout->addSpacerItem(spacer);
+    vboxLayout->addWidget(buttonBox);
+    dialog.setLayout(vboxLayout);
+
+    if(QDialog::Accepted == dialog.exec())
+    {
+        int idx = saveAlgoComboBox->currentIndex();
+        qset->setValue("saveAlgo", saveAlgoComboBox->itemData(idx).toInt() == -1);
+        if(idx > 0)
+            qset->setValue("defaultAlgo", saveAlgoComboBox->itemData(idx));
+        idx = savePadComboBox->currentIndex();
+        qset->setValue("savePad", savePadComboBox->itemData(idx).toInt() == -1);
+        if(idx > 0)
+            qset->setValue("defaultPadding", savePadComboBox->itemData(idx));
+    }
+    qset->endGroup();
+    delete qset;
+    qset = NULL;
+
+    preferencesButton->setChecked(false);
 }
 
 /**

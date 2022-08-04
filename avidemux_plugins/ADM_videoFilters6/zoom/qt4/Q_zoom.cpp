@@ -43,8 +43,7 @@ Ui_zoomWindow::Ui_zoomWindow(QWidget* parent, zoom *param,ADM_coreVideoFilter *i
         myFly->_cookie=&ui;
         myFly->addControl(ui.toolboxLayout);
         myFly->upload();
-        myFly->sliderChanged();
-
+        myFly->refreshImage();
 
         connect( ui.horizontalSlider,SIGNAL(valueChanged(int)),this,SLOT(sliderUpdate(int)));
         connect( ui.pushButtonReset,SIGNAL(clicked(bool)),this,SLOT(reset(bool)));
@@ -182,7 +181,7 @@ uint8_t flyZoom::download(bool even)
       \fn     DIA_getZoomParams
       \brief  Handle zoom dialog
 */
-int DIA_getZoomParams(	const char *name,zoom *param,ADM_coreVideoFilter *in)
+int DIA_getZoomParams(	const char *name,zoom *param, bool firstRun,ADM_coreVideoFilter *in)
 {
         uint8_t ret=0;
         

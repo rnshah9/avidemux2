@@ -197,7 +197,7 @@ uint32_t seg;
     }
     _currentSegment=seg;
     int64_t newTime=(int64_t)v->lastDecodedPts+(int64_t)s->_startTimeUs-(int64_t)s->_refStartTimeUs;
-    ADM_info("Seek done, in reference, gone to %" PRIu64" with segment start at %" PRIu64"\n",v->lastDecodedPts,s->_refStartTimeUs);
+    ADM_info("Seek done, decoded to %" PRIu64" us in ref (%s linear) with segment start at %" PRIu64" us\n", v->lastDecodedPts, ADM_us2plain(newTime), s->_refStartTimeUs);
     SET_CURRENT_PTS(newTime);
     return true;
 
@@ -556,11 +556,24 @@ uint32_t segNo;
 uint8_t ADM_Composer::dupe(ADMImage *src,ADMImage *dst,_VIDEOS *vid)
 {
     if(src->_pixfrmt==ADM_PIXFRMT_YV12)
+    {
+        if(vid->srcPixFrmt == ADM_PIXFRMT_INVALID)
+            vid->srcPixFrmt = ADM_PIXFRMT_YV12;
         return dst->duplicate(src);
+    }
     // We need to do some colorspace conversion
     // Is there already one ?
     if(!vid->color)
+    {
         vid->color=new ADMColorScalerSimple(src->_width,src->_height,src->_pixfrmt,ADM_PIXFRMT_YV12);
+        vid->srcPixFrmt = src->_pixfrmt;
+        vid->srcColSpace = src->_colorSpace;
+    }else if(vid->srcPixFrmt != ADM_PIXFRMT_INVALID && vid->srcPixFrmt != src->_pixfrmt)
+    { // We need to refresh the converter
+        delete vid->color;
+        vid->color = NULL;
+        return dupe(src,dst,vid);
+    }
     // Since it is not YV12 it MUST be a ref
     ADM_assert(src->isRef());
     dst->copyInfo(src);

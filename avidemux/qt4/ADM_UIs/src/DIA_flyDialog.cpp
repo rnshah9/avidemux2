@@ -46,6 +46,16 @@ public:
 
             horizontalLayout_4->addWidget(pushButton_back1mn);
 
+            pushButton_gotosel_start = new QPushButton();
+            pushButton_gotosel_start->setObjectName(QString("pushButton_gotosel_start"));
+
+            horizontalLayout_4->addWidget(pushButton_gotosel_start);
+
+            pushButton_gotosel_end = new QPushButton();
+            pushButton_gotosel_end->setObjectName(QString("pushButton_gotosel_end"));
+
+            horizontalLayout_4->addWidget(pushButton_gotosel_end);
+
             pushButton_play = new QPushButton();
             pushButton_play->setObjectName(QString("pushButton_play"));
             pushButton_play->setCheckable(true);
@@ -65,6 +75,7 @@ public:
             pushButton_fwd1mn->setAutoRepeatDelay(1000);
 
             horizontalLayout_4->addWidget(pushButton_fwd1mn);
+            
             //
             QString zeros = "00:00:00.000";
             currentTime = new QLineEdit(zeros);
@@ -125,25 +136,43 @@ public:
 
             pushButton_back1mn->setToolTip(QApplication::translate("seekablePreviewDialog", "Back one minute", 0));
             pushButton_back1mn->setText(QApplication::translate("seekablePreviewDialog", "<<", 0));
+            pushButton_gotosel_start->setText(QApplication::translate("seekablePreviewDialog", "A", 0));
+            pushButton_gotosel_start->setToolTip(QApplication::translate("seekablePreviewDialog", "Go to the start of the selection", 0));
+            pushButton_gotosel_end->setText(QApplication::translate("seekablePreviewDialog", "B", 0));
+            pushButton_gotosel_end->setToolTip(QApplication::translate("seekablePreviewDialog", "Go to the end of the selection", 0));
             pushButton_play->setText(QApplication::translate("seekablePreviewDialog", "Play", 0));
             pushButton_next->setToolTip(QApplication::translate("seekablePreviewDialog", "Next image", 0));
             pushButton_next->setText(QApplication::translate("seekablePreviewDialog", ">", 0));
             pushButton_fwd1mn->setText(QApplication::translate("seekablePreviewDialog", ">>", 0));
             pushButton_fwd1mn->setToolTip(QApplication::translate("seekablePreviewDialog", "Forward one minute", 0));
-         }
+
+            QSize bsize = pushButton_gotosel_start->sizeHint();
+            if(bsize.isValid())
+            {
+                int w = bsize.width()/2;
+                pushButton_gotosel_start->setMaximumWidth(w);
+                pushButton_gotosel_end->setMaximumWidth(w);
+            }
+        }
         void disableButtons()
         {
+            pushButton_gotosel_start->setEnabled(false);
+            pushButton_gotosel_end->setEnabled(false);
             pushButton_back1mn->setEnabled(false);
             pushButton_fwd1mn->setEnabled(false);
             pushButton_next->setEnabled(false);
         }
         void enableButtons()
         {
+            pushButton_gotosel_start->setEnabled(true);
+            pushButton_gotosel_end->setEnabled(true);
             pushButton_back1mn->setEnabled(true);
             pushButton_fwd1mn->setEnabled(true);
             pushButton_next->setEnabled(true);
         }
 public:
+        QPushButton *pushButton_gotosel_start;
+        QPushButton *pushButton_gotosel_end;
         QPushButton *pushButton_back1mn;
         QPushButton *pushButton_play;
         QPushButton *pushButton_next;
@@ -192,9 +221,10 @@ void ADM_flyDialog::recomputeSize(void)
         _zoom = 1;
         _zoomW = _w;
         _zoomH = _h;
-        postInit (true);
+        _canvas->changeSize(_zoomW, _zoomH);
+        _canvas->parentWidget()->setMinimumSize(_zoomW, _zoomH);
         updateZoom();
-        sliderChanged();
+        refreshImage();
         return;
     }
     
@@ -222,9 +252,10 @@ void ADM_flyDialog::recomputeSize(void)
     _zoom = new_zoom;
     _zoomW = new_zoomW;
     _zoomH = new_zoomH;
-    postInit (true);
+    _canvas->changeSize(_zoomW, _zoomH);
+    _canvas->parentWidget()->setMinimumSize(_zoomW, _zoomH);
     updateZoom();
-    sliderChanged();
+    refreshImage();
 }
 
 /**
@@ -263,25 +294,45 @@ bool    ADM_flyDialog::goToTime(uint64_t tme)
 }
 
 /**
+    \fn goToExactTime
+*/
+bool ADM_flyDialog::goToExactTime(uint64_t tme)
+{
+    _in->goToTime(tme,true);
+    return nextImageInternal();
+}
+
+/**
+    \fn refresh
+    \brief Seek to the current position, re-process the image and sync the slider
+*/
+bool ADM_flyDialog::refreshImage(void)
+{
+    if(goToExactTime(lastPts))
+    {
+        updateSlider();
+        return true;
+    }
+    return false;
+}
+
+/**
     \fn sliderChanged
     \brief callback to handle image changes
 */
-uint8_t    ADM_flyDialog::sliderChanged(void)
+bool ADM_flyDialog::sliderChanged(void)
 {
     uint32_t fn= sliderGet();
-    uint32_t frameNumber;
     uint32_t len,flags;
 
     ADM_assert(_yuvBuffer);
     ADM_assert(_in);
-
 
     double time;
     time=fn;
     time/=ADM_FLY_SLIDER_MAX;
     time*=_in->getInfo()->totalDuration;
     return goToTime(time);
-    
 }
 /**
     \fn toRgbPixFrmt
@@ -296,7 +347,7 @@ ADM_pixelFormat ADM_flyDialog::toRgbPixFrmt(void)
  * @param frame
  * @return 
  */
-bool        ADM_flyDialog::addControl(QHBoxLayout *horizontalLayout_4, ControlOption controlOptions, QWidget * userWidget)
+bool ADM_flyDialog::addControl(QHBoxLayout *horizontalLayout_4, ControlOption controlOptions, QWidget * userWidget)
 {
     _parent->setSizePolicy(QSizePolicy(QSizePolicy::Minimum,QSizePolicy::Minimum));
     _control=new flyControl(horizontalLayout_4, controlOptions, userWidget);
@@ -306,6 +357,8 @@ bool        ADM_flyDialog::addControl(QHBoxLayout *horizontalLayout_4, ControlOp
     QObject::connect(_control->pushButton_next ,SIGNAL(clicked()),this,SLOT(nextImage()));
     QObject::connect(_control->pushButton_back1mn ,SIGNAL(clicked()),this,SLOT(backOneMinute()));
     QObject::connect(_control->pushButton_fwd1mn ,SIGNAL(clicked()),this,SLOT(fwdOneMinute()));
+    QObject::connect(_control->pushButton_gotosel_start,SIGNAL(clicked()),this,SLOT(gotoSelectionStart()));
+    QObject::connect(_control->pushButton_gotosel_end,SIGNAL(clicked()),this,SLOT(gotoSelectionEnd()));
     QObject::connect(_control->pushButton_play ,SIGNAL(toggled(bool )),this,SLOT(play(bool)));
     if (controlOptions & ControlOption::PeekOriginalBtn)
     {
@@ -315,6 +368,8 @@ bool        ADM_flyDialog::addControl(QHBoxLayout *horizontalLayout_4, ControlOp
 
 
     buttonList.push_back(_control->pushButton_back1mn);
+    buttonList.push_back(_control->pushButton_gotosel_start);
+    buttonList.push_back(_control->pushButton_gotosel_end);
     buttonList.push_back(_control->pushButton_play);
     buttonList.push_back(_control->pushButton_next);
     buttonList.push_back(_control->pushButton_fwd1mn);
@@ -393,19 +448,20 @@ bool ADM_flyDialog::nextImage(void)
 }
 
 /**
- * 
- * @return 
+ * \fn initializeSize
+ * \brief Get the width and height of the parts of the dialog above and below the canvas
  */
-bool ADM_flyDialog::initializeSize()
+bool ADM_flyDialog::initializeSize(void)
 {
     _canvas->resize(1,1);
+    _canvas->parentWidget()->parentWidget()->adjustSize();
     QSize qsize= _canvas->parentWidget()->parentWidget()->frameSize();
-    //_usedWidth = qsize.width();
     // Normally there is nothing interesting left and right, we can use a hardcoded value
-    _usedWidth=64;
+    _usedWidth = 32;
     _usedHeight = qsize.height();
+    if (_usedHeight > 0) _usedHeight--;
 
-     if (_resizeMethod != RESIZE_NONE) 
+    if (_resizeMethod != RESIZE_NONE)
     {
         _zoom = calcZoomFactor();
         if (_zoom == 1) 
@@ -467,9 +523,8 @@ float ADM_flyDialog::calcZoomToBeDisplayable( uint32_t imageWidth, uint32_t imag
     _yuvBufferOut=new ADMImageDefault(_w,_h);
     yuvToRgb=NULL;  
     initializeSize();
-    postInit(false);
+    _canvas->parentWidget()->setMinimumSize(_zoomW, _zoomH);
     updateZoom();
-    _nextRdv=0;
 }
 void ADM_flyDialogYuv::resetScaler(void)
 {
@@ -538,9 +593,8 @@ ADM_flyDialogRgb::ADM_flyDialogRgb(QDialog *parent,uint32_t width, uint32_t heig
                             ADM_PIXFRMT_YV12,toRgbPixFrmt());
     rgb2rgb=NULL;
     initializeSize();
-    postInit(false);
+    _canvas->parentWidget()->setMinimumSize(_zoomW, _zoomH);
     updateZoom();
-
 }
 void ADM_flyDialogRgb::resetScaler(void)
 {
@@ -592,40 +646,6 @@ bool ADM_flyDialogRgb::process(void)
     return true;
 }
 
-
-
-
-/**
-    \fn    FlyDialogEventFilter
-    \brief
-*/
-
-FlyDialogEventFilter::FlyDialogEventFilter(ADM_flyDialog *flyDialog)
-{
-    recomputed = false;
-    this->flyDialog = flyDialog;
-}
-/**
-    \fn    eventFilter
-    \brief
-*/
-
-bool FlyDialogEventFilter::eventFilter(QObject *obj, QEvent *event)
-{
-    if (event->type() == QEvent::Show && !recomputed)
-    {
-        recomputed = true;
-        QWidget* parent = (QWidget*)obj;
-        uint32_t screenWidth, screenHeight;
-
-        UI_getPhysicalScreenSize(parent, &screenWidth, &screenHeight);
-        flyDialog->recomputeSize();
-        QCoreApplication::processEvents();
-        parent->move((((int)screenWidth) - parent->frameSize().width()) / 2, (((int)screenHeight) - parent->frameSize().height()) / 2);
-    }
-
-    return QObject::eventFilter(obj, event);
-}
 /**
     \fn    ADM_flyDialog
     \brief
@@ -648,14 +668,17 @@ bool FlyDialogEventFilter::eventFilter(QObject *obj, QEvent *event)
     _cookie = NULL;
     _computedZoom=0;
     _resizeMethod = resizeMethod;
-    _zoomChangeCount = 0;        
     _yuvBuffer=new ADMImageDefault(_w,_h);
     _usedWidth= _usedHeight=0;
     _oldViewWidth = _oldViewHeight = 0;
+    _nextRdv=0;
     lastPts= _in->getInfo()->markerA;
+    uint64_t startTime = _in->getAbsoluteStartTime();
+    printf("[ADM_flyDialog::ctor] Bridge start time: %s\n",ADM_us2plain(startTime));
+    if(lastPts > startTime)
+        lastPts -= startTime;
     setCurrentPts(lastPts);
-    _in->goToTime(lastPts);
-    updateSlider();
+    // Seek is delegated to the user
     _bypassFilter=false;
 
     QGraphicsScene *sc=new QGraphicsScene(this);
@@ -681,29 +704,6 @@ bool FlyDialogEventFilter::eventFilter(QObject *obj, QEvent *event)
     slider->setInvertedWheel(swapWheel);
     slider->setMarkers(_in->getInfo()->totalDuration,_in->getInfo()->markerA,_in->getInfo()->markerB);
     
-}
-/**
-    \fn    postInit
-    \brief
-*/
-
-void ADM_flyDialog::postInit(uint8_t reInit)
-{
-    QWidget *graphicsView = _canvas->parentWidget();
-    ADM_flyNavSlider  *slider=(ADM_flyNavSlider *)_slider;
-
-    if (reInit)
-    {
-        FlyDialogEventFilter *eventFilter = new FlyDialogEventFilter(this);
-
-        if (slider)
-            slider->setMaximum(ADM_FLY_SLIDER_MAX);
-
-        graphicsView->parentWidget()->installEventFilter(eventFilter);
-    }
-
-    _canvas->changeSize(_zoomW, _zoomH);
-    graphicsView->setMinimumSize(_zoomW, _zoomH);
 }
 
 /**
@@ -840,11 +840,8 @@ uint8_t     ADM_flyDialog::sliderSet(uint32_t value)
 void ADM_flyDialog::updateSlider(void)
 {
     ADM_assert(_in);
-    uint64_t dur=_in->getInfo()->totalDuration;
-    uint64_t pts=getCurrentPts();
-    double pos;
-    pos=pts;
-    pos/=dur;
+    double pos=lastPts;
+    pos/=_in->getInfo()->totalDuration;
     pos*=ADM_FLY_SLIDER_MAX;
     pos+=0.5; // round up
     sliderSet((uint32_t)pos);
@@ -870,8 +867,13 @@ void ADM_flyDialog::backOneMinute(void)
     uint64_t pts=getCurrentPts();
     if(pts<JUMP_LENGTH) pts=0;
     else pts-=JUMP_LENGTH;
+
+    ADM_assert(_slider);
+
+    bool oldState = _slider->blockSignals(true);
     goToTime(pts);
     updateSlider();
+    _slider->blockSignals(oldState);
 }
 /**
  * 
@@ -880,9 +882,55 @@ void ADM_flyDialog::fwdOneMinute(void)
 {
     uint64_t pts=getCurrentPts();
     pts+=JUMP_LENGTH;
+
+    ADM_assert(_slider);
+
+    bool oldState = _slider->blockSignals(true);
     goToTime(pts);
     updateSlider();
+    _slider->blockSignals(oldState);
 }
+
+/**
+ * \fn gotoSelectionStart
+ */
+void ADM_flyDialog::gotoSelectionStart(void)
+{
+    ADM_assert(_slider);
+    bool oldState = _slider->blockSignals(true);
+
+    uint64_t pts = _in->getInfo()->markerA;
+    if (_in->getInfo()->markerB < _in->getInfo()->markerA)
+        pts = _in->getInfo()->markerB;
+    if (pts > _in->getAbsoluteStartTime())
+        pts -= _in->getAbsoluteStartTime();
+
+    goToExactTime(pts);
+
+    updateSlider();
+    _slider->blockSignals(oldState);
+}
+
+/**
+ * \fn gotoSelectionEnd
+ */
+void ADM_flyDialog::gotoSelectionEnd(void)
+{
+    ADM_assert(_slider);
+    bool oldState = _slider->blockSignals(true);
+
+    uint64_t pts = _in->getInfo()->markerB;
+    if (_in->getInfo()->markerA > _in->getInfo()->markerB)
+        pts = _in->getInfo()->markerA;
+    if (pts > _in->getAbsoluteStartTime())
+        pts -= _in->getAbsoluteStartTime();
+
+    goToExactTime(pts);
+
+    updateSlider();
+    _slider->blockSignals(oldState);
+}
+
 /**
  * 
  */
@@ -904,7 +952,13 @@ void ADM_flyDialog::play(bool state)
         _control->enableButtons();
         slide->setEnabled(true);
     }
-    
+    // Allow to stop or start playback from the parent dialog cleanly.
+    if(_control->pushButton_play->isChecked() != state)
+    {
+        _control->pushButton_play->blockSignals(true);
+        _control->pushButton_play->setChecked(state);
+        _control->pushButton_play->blockSignals(false);
+    }
 }
 /**
  * 

@@ -401,14 +401,33 @@ bool ADM_Composer::getVideoPixelAndColorInfo(ADM_pixelFormat * pixfrmt, ADM_colo
 {
     if (_blankImageForInfo == NULL)
         return false;
-    if (pixfrmt==NULL || range==NULL || colorPrim==NULL || colorTrc==NULL || colorSpace==NULL)
-        return false;
-    *pixfrmt = _blankImageForInfo->_pixfrmt;
-    *range = _blankImageForInfo->_range;
-    *colorPrim = _blankImageForInfo->_colorPrim;
-    *colorTrc = _blankImageForInfo->_colorTrc;
-    *colorSpace = _blankImageForInfo->_colorSpace;
+    if (pixfrmt)
+        *pixfrmt = _blankImageForInfo->_pixfrmt;
+    if (range)
+        *range = _blankImageForInfo->_range;
+    if (colorPrim)
+        *colorPrim = _blankImageForInfo->_colorPrim;
+    if (colorTrc)
+        *colorTrc = _blankImageForInfo->_colorTrc;
+    if (colorSpace)
+        *colorSpace = _blankImageForInfo->_colorSpace;
     return true;
+}
+
+/**
+    \fn possibleHdrContent
+*/
+bool ADM_Composer::possibleHdrContent(void)
+{
+    for(int i = 0; i < _segments.getNbRefVideos(); i++)
+    {
+        _VIDEOS *vid = _segments.getRefVideo(i);
+        ADM_assert(vid);
+        if((vid->srcPixFrmt >= ADM_PIXFRMT_YUV444_10BITS) && (vid->srcPixFrmt <= ADM_PIXFRMT_YUV444_12BITS) &&
+           (vid->srcColSpace >= ADM_COL_SPC_BT2020_NCL) && (vid->srcColSpace <= ADM_COL_SPC_ICTCP))
+            return true;
+    }
+    return false;
 }
 
 /**
@@ -766,10 +785,23 @@ uint8_t ADM_Composer::addFile (const char *name)
         }
      }
     int lastVideo=_segments.getNbSegments();
-    if(lastVideo && (isH264Compatible(info.fcc) || FCC_MATCHES("WVC1") || FCC_MATCHES("WMV3")))
+    if(lastVideo)
     {
-        ADM_info("%s sometimes has invalid timestamps which confuse avidemux, checking\n",fourCC::tostring(info.fcc));
-        checkForValidPts(_segments.getSegment(lastVideo-1)); 
+        _SEGMENT *seg = _segments.getSegment(lastVideo-1);
+        ADM_assert(seg);
+        if(isH264Compatible(info.fcc) || FCC_MATCHES("WVC1") || FCC_MATCHES("WMV3"))
+        {
+            ADM_info("%s sometimes has invalid timestamps which confuse avidemux, checking\n",fourCC::tostring(info.fcc));
+            checkForValidPts(seg);
+        }else
+        {
+            uint64_t start = seg->_startTimeUs;
+            if(!seg->_refStartTimeUs && video.firstFramePts)
+                start += video.firstFramePts;
+            if(goToTimeVideo(start))
+                getVideoPixelAndColorInfo(&(video.srcPixFrmt),NULL,NULL,NULL,&(video.srcColSpace));
+        }
+        // now we should be able to query whether HDR tone mapping may be needed
     }
     if(!video.fieldEncoded && checkForDoubledFps(video._aviheader,video.timeIncrementInUs))
     {

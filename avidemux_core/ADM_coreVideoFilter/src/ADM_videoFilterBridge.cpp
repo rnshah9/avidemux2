@@ -179,23 +179,49 @@ FilterInfo  *ADM_videoFilterBridge::getInfo(void)
 /**
     \fn goToTime
 */
-bool         ADM_videoFilterBridge::goToTime(uint64_t usSeek)
+bool         ADM_videoFilterBridge::goToTime(uint64_t usSeek, bool fineSeek)
 {
     if (!usSeek)
     {
-        editor->goToTimeVideo(startTime + usSeek);
+        editor->goToTimeVideo(startTime);
     }
     else
     {
-        uint64_t seek = usSeek;
-
-        if (true == editor->getPKFramePTS(&seek))
+        usSeek += startTime;
+        if (fineSeek)
         {
-            editor->goToIntraTimeVideo(seek);
+            // When fine-seeking to a time very close to marker positions,
+            // substitute it with the closest marker as filters which modify
+            // timing may introduce loss of precision. Marker A has priority.
+#define MAGNETIC_RANGE 100
+            uint64_t markerDiff = (usSeek > bridgeInfo.markerA)? usSeek - bridgeInfo.markerA : bridgeInfo.markerA - usSeek;
+            if (markerDiff < MAGNETIC_RANGE)
+            {
+                usSeek = bridgeInfo.markerA;
+            } else
+            {
+                markerDiff = (usSeek > bridgeInfo.markerB)? usSeek - bridgeInfo.markerB : bridgeInfo.markerB - usSeek;
+                if (markerDiff < MAGNETIC_RANGE)
+                    usSeek = bridgeInfo.markerB;
+            }
+            if (false == editor->goToTimeVideo(usSeek))
+                fineSeek = false;
         }
-        else
+        if (!fineSeek)
         {
-            ADM_warning("Cannot find previous keyframe\n");
+            usSeek++; // avoid skipping to the previous keyframe on repeated calls
+            // don't fail if target time matches marker B at default position, i.e. the full duration of the video
+            uint64_t maxDur = editor->getVideoDuration();
+            if (maxDur && usSeek >= maxDur)
+                usSeek = maxDur - 1;
+            if (editor->getPKFramePTS(&usSeek))
+            {
+                editor->goToIntraTimeVideo(usSeek);
+            }
+            else
+            {
+                ADM_warning("Cannot find previous keyframe\n");
+            }
         }
     }
 

@@ -1,35 +1,30 @@
 #ifndef Q_mpdelogo_h
 #define Q_mpdelogo_h
 
+#include <QMouseEvent>
+#include <QPainter>
+
 #include "ui_logo.h"
 #include "ADM_image.h"
 #include "DIA_flyDialogQt4.h"
 #include "DIA_flyLogo.h"
-#include "QMouseEvent"
-/**
- * 
- * @return 
- */
-class  ADM_LogoCanvas : public ADM_QCanvas
+
+
+class ADM_LogoCanvas : public ADM_QCanvas
 {
     Q_OBJECT
-protected:
+
 public:
-	
-                ADM_LogoCanvas(QWidget *z, uint32_t w, uint32_t h);
-	virtual ~ADM_LogoCanvas();
-        void mousePressEvent(QMouseEvent * event);
-        void mouseReleaseEvent(QMouseEvent * event);
-        void moveEvent(QMoveEvent * event);        
+                ADM_LogoCanvas(QWidget *parent, uint32_t w, uint32_t h) : ADM_QCanvas(parent,w,h) {};
+        virtual ~ADM_LogoCanvas() {};
+
+protected:
+        void    mouseReleaseEvent(QMouseEvent * event);
 
 signals:
-        void movedSignal(int newx, int newy);                
+        void    movedSignal(int newx, int newy);
 };
 
-/**
- * 
- * @return 
- */
 class Ui_logoWindow : public QDialog
 {
 	Q_OBJECT
@@ -42,12 +37,13 @@ protected:
         flyLogo             *myLogo;
         ADM_LogoCanvas      *canvas;
 
-        bool                enableLowPart(void);
+        float               imageScale;
         bool                tryToLoadimage(const char *image);
+        bool                enableLowPart(void);
 public:
         ADMImage            *image;
+        ADMImage            *scaledImage;
         std::string         imageName;
-        int                 imageWidth,imageHeight;
 
 public:
                             Ui_logoWindow(QWidget *parent, logo *param, ADM_coreVideoFilter *in);
@@ -59,8 +55,8 @@ private slots:
 	void                sliderUpdate(int foo);
 	void                valueChanged(int foo);
         void                valueChanged(double foo);
-        void                moved(int x,int y);
-        void                preview(int x);
+        void                moved(int x, int y);
+        void                scaleChanged(double foo);
         void                imageSelect();
 
 private:

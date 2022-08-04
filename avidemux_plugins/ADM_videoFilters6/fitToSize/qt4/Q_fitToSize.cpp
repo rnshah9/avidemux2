@@ -19,6 +19,7 @@
 #include "DIA_coreToolkit.h"
 #include "ADM_toolkitQt.h"
 #include "ADM_vidFitToSize.h"
+#include "ADM_QSettings.h"
 
 #if 0
 #define aprintf printf
@@ -31,6 +32,25 @@ fitToSizeWindow::fitToSizeWindow(QWidget *parent, resParam *param) : QDialog(par
     ui.setupUi(this);
     _param=param;
 
+    if (_param->firstRun)
+    {
+        QSettings *qset = qtSettingsCreate();
+        if(qset)
+        {
+            qset->beginGroup("fitToSize");
+            _param->rsz.algo = qset->value("defaultAlgo", 1).toInt();
+            _param->rsz.pad = qset->value("defaultPadding", 0).toInt();
+            // sanitize
+            if(_param->rsz.algo >= ui.comboBoxAlgo->count())
+                _param->rsz.algo = 1;
+            if(_param->rsz.pad >= ui.comboBoxPad->count())
+                _param->rsz.pad = 0;
+            qset->endGroup();
+            delete qset;
+            qset = NULL;
+        }
+    }    
+    
     ui.comboBoxRoundup->setCurrentIndex(_param->rsz.roundup);
 
     ui.spinBoxWidth->setKeyboardTracking(false);
@@ -52,6 +72,10 @@ fitToSizeWindow::fitToSizeWindow(QWidget *parent, resParam *param) : QDialog(par
     ui.labelInputSize->setText(" " + QString("%1 x %2").arg(_param->originalWidth).arg(_param->originalHeight));
     printInfo();
 
+    preferencesButton = ui.buttonBox->addButton(QT_TRANSLATE_NOOP("fitToSize","Preferences"),QDialogButtonBox::ResetRole);
+    preferencesButton->setCheckable(true);
+    connect(preferencesButton,SIGNAL(clicked(bool)),this,SLOT(setPreferences(bool)));
+    
     connectDimensionControls();
 }
 
@@ -180,6 +204,102 @@ void fitToSizeWindow::roundupChanged(int index)
     connectDimensionControls();
 }
 
+void fitToSizeWindow::setPreferences(bool f)
+{
+    UNUSED_ARG(f);
+
+    QSettings *qset = qtSettingsCreate();
+    if(!qset)
+    {
+        preferencesButton->setChecked(false);
+        return;
+    }
+
+    qset->beginGroup("fitToSize");
+
+    QDialog dialog(preferencesButton);
+    dialog.setWindowTitle(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Preferences")));
+
+    QGroupBox *frameDefaults = new QGroupBox(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Defaults for new filter instances")));
+
+    QLabel *textAlgo = new QLabel(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Resize method:")));
+
+    QComboBox *saveAlgoComboBox = new QComboBox();
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Most recently accepted")),-1);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Bilinear")),0);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Bicubic")),1);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Lanczos")),2);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Spline")),3);
+    saveAlgoComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Nearest Neighbor")),4);
+
+    int userData = (qset->value("saveAlgo", 0).toInt() > 0)? -1 : qset->value("defaultAlgo", 1).toInt();
+
+    for(int i = 0; i < saveAlgoComboBox->count(); i++)
+    {
+        if(userData != saveAlgoComboBox->itemData(i).toInt()) continue;
+        saveAlgoComboBox->setCurrentIndex(i);
+        break;
+    }
+
+    QLabel *textPaddingType = new QLabel(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Padding type:")));
+
+    QComboBox *savePadComboBox = new QComboBox();
+    savePadComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Most recently accepted")),-1);
+    savePadComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Black Bars")),0);
+    savePadComboBox->addItem(QString::fromUtf8(QT_TRANSLATE_NOOP("fitToSize","Echo")),1);
+
+    userData = (qset->value("savePad", 0).toInt() > 0)? -1 : qset->value("defaultPadding", 0).toInt();
+
+    for(int i = 0; i < savePadComboBox->count(); i++)
+    {
+        if(userData != savePadComboBox->itemData(i).toInt()) continue;
+        savePadComboBox->setCurrentIndex(i);
+        break;
+    }
+
+    QSpacerItem *spacer = new QSpacerItem(20, 20, QSizePolicy::Minimum, QSizePolicy::MinimumExpanding);
+
+    QDialogButtonBox *buttonBox = new QDialogButtonBox();
+    buttonBox->setStandardButtons(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+
+    QObject::connect(buttonBox, SIGNAL(accepted()), &dialog, SLOT(accept()));
+    QObject::connect(buttonBox, SIGNAL(rejected()), &dialog, SLOT(reject()));
+
+    QGridLayout *grid = new QGridLayout();
+
+    grid->addWidget(textAlgo,0,0);
+    grid->addWidget(saveAlgoComboBox,0,1);
+    grid->addWidget(textPaddingType,1,0);
+    grid->addWidget(savePadComboBox,1,1);
+    grid->setColumnStretch(1,1);
+
+    frameDefaults->setLayout(grid);
+
+    QVBoxLayout *vboxLayout = new QVBoxLayout();
+
+    vboxLayout->addWidget(frameDefaults);
+    vboxLayout->addSpacerItem(spacer);
+    vboxLayout->addWidget(buttonBox);
+    dialog.setLayout(vboxLayout);
+
+    if(QDialog::Accepted == dialog.exec())
+    {
+        int idx = saveAlgoComboBox->currentIndex();
+        qset->setValue("saveAlgo", saveAlgoComboBox->itemData(idx).toInt() == -1);
+        if(idx > 0)
+            qset->setValue("defaultAlgo", saveAlgoComboBox->itemData(idx));
+        idx = savePadComboBox->currentIndex();
+        qset->setValue("savePad", savePadComboBox->itemData(idx).toInt() == -1);
+        if(idx > 0)
+            qset->setValue("defaultPadding", savePadComboBox->itemData(idx));
+    }
+    qset->endGroup();
+    delete qset;
+    qset = NULL;
+
+    preferencesButton->setChecked(false);
+}
+
 void fitToSizeWindow::okButtonClicked()
 {
     if (ui.spinBoxWidth->value() & 1 || ui.spinBoxHeight->value() & 1)
@@ -191,13 +311,14 @@ void fitToSizeWindow::okButtonClicked()
 /**
     \fn DIA_fitToSize
 */
-bool DIA_fitToSize(uint32_t originalWidth,uint32_t originalHeight,fitToSize *param)
+bool DIA_fitToSize(uint32_t originalWidth,uint32_t originalHeight,fitToSize *param, bool firstRun)
 {
     bool r=false;
     resParam _param={
                         originalWidth,
                         originalHeight,
-                        *param
+                        *param,
+                        firstRun
                    };
 
 
@@ -209,6 +330,24 @@ bool DIA_fitToSize(uint32_t originalWidth,uint32_t originalHeight,fitToSize *par
     if(fitToSizeWindow.exec()==QDialog::Accepted)
     {
         fitToSizeWindow.gather();
+        QSettings *qset = qtSettingsCreate();
+        if(qset)
+        {
+            qset->beginGroup("fitToSize");
+
+            if (qset->value("saveAlgo", 0).toInt() == 1)
+            {
+                qset->setValue("defaultAlgo", _param.rsz.algo);
+            }
+            if (qset->value("savePad", 0).toInt() == 1)
+            {
+                qset->setValue("defaultPadding", _param.rsz.pad);
+            }
+
+            qset->endGroup();
+            delete qset;
+            qset = NULL;
+        }        
         *param=_param.rsz;
         r=true;
     }

@@ -142,6 +142,7 @@ protected:
     QMenu *recentProjects;
     QAction *recentFileAction[NB_LAST_FILES];
     QAction *recentProjectAction[NB_LAST_FILES];
+    QAction *actionHDRSeparator;
     QAction *displayZoom;
     QAction *defaultThemeAction;
     QAction *lightThemeAction;
@@ -166,6 +167,7 @@ protected:
     std::vector<QPushButton *>PushButtonsAvailableWhenFileLoaded;
     std::vector<QPushButton *>PushButtonsDisabledOnPlayback;
 
+    unsigned int navigateByTimeButtonsState;
     ADM_dragState dragState;
     QTimer dragTimer;
     int navigateWhilePlayingState;
