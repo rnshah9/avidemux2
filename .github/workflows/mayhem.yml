@@ -51,7 +51,8 @@ jobs:
       fail-fast: false
       matrix:
         mayhemfile:
-          - mayhem/Mayhemfile
+          - mayhem/Mayhemfile_ADM_splitString
+          - mayhem/Mayhemfile_avidemux3_cli
 
     steps:
       - uses: actions/checkout@v2

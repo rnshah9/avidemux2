@@ -1,0 +1,6 @@
+project: avidemux2
+target: adm-splitstring
+
+cmds:
+  - cmd: /fuzz_ADM_splitString
+    libfuzzer: true
